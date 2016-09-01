@@ -7,4 +7,4 @@ def reversal(string):
 
 my_string = "bucuresti este de rahat"
 
-print reversal(my_string)
+print(reversal(my_string))
