@@ -12,34 +12,44 @@ import json
 import requests
 import shlex
 import subprocess
-import sys
+import argparse
 
-# SUBSCRIPTION ID
-#SUBSCRIPTION = str(sys.argv[1])
-SUBSCRIPTION = '32cefe0b-e9b6-44af-9b2e-35c83da094b4'
+parser = argparse.ArgumentParser()
+
+parser.add_argument('-s', help='subscription id', required=True)
+parser.add_argument('-e', help='IOT environment', required=True)
+parser.add_argument('-rg', help='resource group of the service bus', required=True)
+parser.add_argument('-n', help='namespace of the service bus', required=True)
+
+args = parser.parse_args()
+
+SUBSCRIPTION = args.s
+ENV = args.e
+RES_GROUP = args.rg
+NAMESPACE = args.n
 
 # ENV stands for the Azure Environment to run the script on
 # ENV = str('320749')
-ENV = 'techops'
+#ENV = 'techops'
 #ENV = '342494'
 #ENV = '320749-nc1'
 
 # RES_GROUP is the resource group where the service bus namespace + queues exist
 # RES_GROUP = str('320749')
-RES_GROUP = 'techops'
+#RES_GROUP = 'techops'
 #RES_GROUP = '342494'
 #RES_GROUP = '320749-nc1'
 
 # The name of the Azure service bus namespace where the queues exist
 # NAMESPACE = 'sb-pre-ddm320749'
-NAMESPACE = 'sb-techops007'
+#NAMESPACE = 'sb-techops007'
 #NAMESPACE = 'sb-342494'
 #NAMESPACE = 'sb-pre-ddm320749-nc1'
 
 # lists where we will store all service bus queues and all used queues
 all_queues = []
 used_queues = []
-
+no_queue = 0
 
 # the az cli command to get the queues
 az_cli = ('az servicebus queue list --subscription {} --resource-group {} --namespace-name {} --query "[].id" -o tsv'.format(SUBSCRIPTION, RES_GROUP, NAMESPACE))
