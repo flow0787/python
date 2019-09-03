@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # obtain json from appiot db using this query:
-# select name, id from datacollectors where inactive = 0 and registrationticket IS NOT NULL
+# SELECT name, id FROM datacollectors WHERE inactive = 0 and name != 'AppIot Internal'
 # add the json inside  this script's root named as gateways.json
 # add these lines at the top of the file:
 # { "gateways": [
@@ -9,46 +9,33 @@
 #}
 
 import json
-import requests
 import shlex
 import subprocess
 import argparse
 
+
+# arguments parser
 parser = argparse.ArgumentParser()
 
 parser.add_argument('-s', help='subscription id', required=True)
-parser.add_argument('-e', help='IOT environment', required=True)
+#  parser.add_argument('-e', help='IOT environment', required=True)
 parser.add_argument('-rg', help='resource group of the service bus', required=True)
 parser.add_argument('-n', help='namespace of the service bus', required=True)
+parser.add_argument('-d', help='delete queues flag; if set, will delete unused queues', action='store_true')
 
 args = parser.parse_args()
 
 SUBSCRIPTION = args.s
-ENV = args.e
+#  ENV = args.e
 RES_GROUP = args.rg
 NAMESPACE = args.n
+DELETE = args.d
 
-# ENV stands for the Azure Environment to run the script on
-# ENV = str('320749')
-#ENV = 'techops'
-#ENV = '342494'
-#ENV = '320749-nc1'
-
-# RES_GROUP is the resource group where the service bus namespace + queues exist
-# RES_GROUP = str('320749')
-#RES_GROUP = 'techops'
-#RES_GROUP = '342494'
-#RES_GROUP = '320749-nc1'
-
-# The name of the Azure service bus namespace where the queues exist
-# NAMESPACE = 'sb-pre-ddm320749'
-#NAMESPACE = 'sb-techops007'
-#NAMESPACE = 'sb-342494'
-#NAMESPACE = 'sb-pre-ddm320749-nc1'
 
 # lists where we will store all service bus queues and all used queues
 all_queues = []
 used_queues = []
+# number of gateways without queues
 no_queue = 0
 
 # the az cli command to get the queues
@@ -74,20 +61,20 @@ if all_queues[0] == '':
 for q in 'drudgeryqueue', 'drudgerylightweightqueue', 'drudgeryinternalqueue', 'httpintegrationqueue':
   all_queues.remove(q)
 
-#print(all_queues)
+print('-' * 123)
+print('|%20s %36s %36s %27s' % ('Gateway Name', 'Gateway ID', 'Queue Name', '|'))
+print('-' * 123)
+
+# open the gateways.json file
 try:
   with open('gateways.json', 'r') as f:
     gateways = json.load(f)
 except FileNotFoundError:
   print('gateways.json file not found.')
 except Exception:
-  print('Something went wrong...')
+  print('Something went wrong...')      # iterate over all items of the dict and obtain the gateway id
 
-print('-' * 123)
-print('|%20s %36s %36s %27s' % ('Gateway Name', 'Gateway ID', 'Queue Name', '|'))
-print('-' * 123)
-
-# iterate over all items of the dict and obtain the gateway id
+# iterate over all gateways in the gateways.json file and find the queue
 for gw in gateways['gateways']:
   gw_name = gw['name']
   gw_id = gw['id']
@@ -108,9 +95,7 @@ for gw in gateways['gateways']:
     queue_name = output[-1]
     used_queues.append(queue_name)
   print('{!s:<45} | {!s:<20} | {!s:<20}'.format(gw_name, gw_id, queue_name))
-#print(used_queues)
 print('-' * 123)
-
 #list of unused queues
 unused_queues = []
 
@@ -120,13 +105,33 @@ for aq in all_queues:
   if aq not in used_queues:
     unused_queues.append(aq)
 
-print('|%20s %20s %20s %20s %39s' % ('Total Queues', 'Used Queues', 'Unused Queues', 'Removed Queues', '|'))
-print('-' * 123)
-print('{:>10} {:>21} {:>18} {!s:>72}'.format(len(all_queues), len(used_queues), len(unused_queues), '|'))
-print('-' * 123)
+# no of deleted queues
+deleted_queues = 0
 
+# delete all unused queues if there are any:
+if DELETE:
+  if len(unused_queues) > 1:
+    for q in unused_queues:
+      az_cli = ('az servicebus queue delete --subscription {} --resource-group {} --namespace-name {} --name {}'.format(SUBSCRIPTION, RES_GROUP, NAMESPACE, q))
+      subprocess_cmd = shlex.split(az_cli)
+      delete_return_code = subprocess.call(subprocess_cmd)
+      if delete_return_code == 0:
+        print('Successfully deleted unused queue {}'.format(q))
+        deleted_queues += 1
+      else:
+        print('Could NOT delete unused queue {}'.format(q))
+  else:
+    print('There are no unused queues to delete.')
+else:
+  print('Will not remove unused queues. Delete flag (-d) isn\'t set.')
+
+print('-' * 123)
+print('|%20s %20s %20s %20s %38s' % ('Total Queues', 'Used Queues', 'Unused Queues', 'Removed Queues', '|'))
+print('-' * 123)
+print('|{:>10} {:>21} {:>18} {:>18} {!s:>51}'.format(len(all_queues), len(used_queues), len(unused_queues),deleted_queues, '|'))
+print('-' * 123)
 
 # FOR DEBUG ONLY
-print('all: \n{}'.format(all_queues))
-print('used: \n{}'.format(used_queues))
-print('unused: \n{}'.format(unused_queues))
+#print('all: \n{}'.format(all_queues))
+#print('used: \n{}'.format(used_queues))
+#print('unused: \n{}'.format(unused_queues))
